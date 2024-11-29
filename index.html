@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Population Analysis</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .chart-container {
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+        }
+        .description {
+            margin: 10px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="global-change" class="chart-container">
+        <h2>Global Population Change (1980-2050)</h2>
+        <div class="chart"></div>
+        <h2>Audiencia<h2>
+        <p >Público en general que desean saber acerca de geopolítca</p>
+        <h2>Objetivo<h2>
+        <p >Mostrar como se moverá la poblacion a nivel mundial de aqui al 2050 de manera que ayude a explicar las decisiones de las principales potencias</p>
+        <h2>Mensaje<h2>
+        <p >Se muestra como China esta actualmente en su máximo de población y su proxima decadencia poblacional, mientras que india se perfila como la mayor poblada</p> 
+    </div>
+
+    <div id="good-bad" class="chart-container">
+        <h2>Population Growth Rates (2023-2024)</h2>
+        <div class="chart"></div>
+        <p class="description">Compares positive (good) and negative (challenging) population growth rates among countries.</p>
+    </div>
+
+    <div id="trend" class="chart-container">
+        <h2>Population Trends of Top 10 Countries</h2>
+        <div class="chart"></div>
+        <p class="description">Shows the population trajectory of the ten most populous nations from 1980 to 2024.</p>
+    </div>
+
+    <div id="black-n-white" class="chart-container">
+        <h2>Population Density Distribution</h2>
+        <div class="chart"></div>
+        <p class="description">Monochromatic visualization of population density patterns across countries.</p>
+    </div>
+
+<script>
+// Load and process data
+d3.csv("https://inkarry.github.io/DataVisualizacion2024/countries-table.csv",{ 
+    headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+}).then(function(data) {
+    // Global Change Chart
+    function createGlobalChangeChart(data) {
+    const width = 800;
+    const height = 400;
+    const margin = {top: 20, right: 120, bottom: 40, left: 60};
+
+    const svg = d3.select("#global-change .chart")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const parsePopulation = d => d ? +d : 0;
+    const years = [1980, 2000, 2010, 2023, 2024, 2030, 2050];
+
+    const formatPopulation = value => {
+        const millions = value / 1e6;
+        if (millions >= 1000) {
+            return (millions/1000).toFixed(1) + ' billion';
+        }
+        return millions.toFixed(1) + ' million';
+    };
+
+    const formatYAxis = value => {
+        const millions = value / 1e6;
+        if (millions >= 1000) {
+            return Math.round(millions/1000) + 'B';
+        }
+        return Math.round(millions) + 'M';
+    };
+
+    const top5 = data
+        .sort((a, b) => parsePopulation(b.pop2024) - parsePopulation(a.pop2024))
+        .slice(0, 5)
+        .map(d => ({
+            country: d.country,
+            populations: years.map(year => ({
+                year: year,
+                value: parsePopulation(d[`pop${year}`])
+            }))
+        }));
+
+    const x = d3.scalePoint()
+        .domain(years)
+        .range([margin.left, width - margin.right])
+        .padding(0.5);
+
+    const maxPop = d3.max(top5, d => d3.max(d.populations, p => p.value));
+    
+    const y = d3.scaleLinear()
+        .domain([0, maxPop])
+        .range([height - margin.bottom, margin.top]);
+
+    const lineGenerator = d3.line()
+        .x(d => x(d.year))
+        .y(d => y(d.value));
+
+    // Add grey background for future projections
+    svg.append("rect")
+        .attr("x", x(2024))
+        .attr("y", margin.top)
+        .attr("width", width - x(2024) - margin.right)
+        .attr("height", height - margin.top - margin.bottom)
+        .attr("fill", "#f5f5f5")
+        .attr("opacity", 0.3);
+
+    // Línea vertical 2024
+    svg.append("line")
+        .attr("x1", x(2024))
+        .attr("x2", x(2024))
+        .attr("y1", margin.top)
+        .attr("y2", height - margin.bottom)
+        .attr("stroke", "#999")
+        .attr("stroke-dasharray", "4,4");
+
+    top5.forEach((country, i) => {
+        const color = d3.schemeCategory10[i];
+        const g = svg.append("g");
+
+        g.append("path")
+            .datum(country.populations)
+            .attr("fill", "none")
+            .attr("stroke", color)
+            .attr("stroke-width", 2)
+            .attr("d", lineGenerator);
+
+        country.populations.forEach(pop => {
+            g.append("circle")
+                .attr("cx", x(pop.year))
+                .attr("cy", y(pop.value))
+                .attr("r", 4)
+                .attr("fill", color);
+
+            let labelX = x(pop.year);
+            let labelY = y(pop.value) - 10;
+            let anchor = "middle";
+
+            if (country.country === "Indonesia") {
+                labelX = x(pop.year) - 5;
+                labelY = y(pop.value);
+                anchor = "end";
+            } else if (country.country === "Pakistan") {
+                labelY = y(pop.value) + 10;
+            } else if (country.country === "United States") {
+                labelY = y(pop.value) - 10;
+            }
+
+            g.append("text")
+                .attr("x", labelX)
+                .attr("y", labelY)
+                .attr("text-anchor", anchor)
+                .attr("font-size", "8px")
+                .text(formatPopulation(pop.value));
+        });
+
+        let labelY = y(country.populations[country.populations.length - 1].value);
+        if (country.country === "United States") {
+            labelY -= 30;
+        } else if (country.country === "Indonesia") {
+            labelY += 15;
+        } else if (country.country === "Pakistan") {
+            labelY += 45;
+        }
+
+        g.append("text")
+            .attr("x", x(2050) + 15)
+            .attr("y", labelY)
+            .attr("fill", color)
+            .attr("dominant-baseline", "middle")
+            .attr("font-weight", "bold")
+            .text(country.country);
+    });
+
+    svg.append("g")
+        .attr("transform", `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+    svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y).tickFormat(formatYAxis));
+}
+
+    // Trend Chart
+    function createWorldPopulationTrendChart(data) {
+    const width = 800;
+    const height = 400;
+    const margin = {top: 20, right: 120, bottom: 40, left: 60};
+
+    const svg = d3.select("#trend .chart")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const parsePopulation = d => d ? +d : 0;
+    const years = [1980, 2000, 2010, 2023, 2024, 2030, 2050];
+
+    const formatPopulation = value => {
+        const millions = value / 1e6;
+        if (millions >= 1000) {
+            return (millions/1000).toFixed(1) + ' billion';
+        }
+        return millions.toFixed(1) + ' million';
+    };
+
+    const formatYAxis = value => {
+        const millions = value / 1e6;
+        if (millions >= 1000) {
+            return Math.round(millions/1000) + 'B';
+        }
+        return Math.round(millions) + 'M';
+    };
+
+    // Calcular la población mundial por año
+    const worldPopulationData = years.map(year => ({
+        year: year,
+        value: d3.sum(data, d => parsePopulation(d[`pop${year}`]))
+    }));
+
+    const x = d3.scalePoint()
+        .domain(years)
+        .range([margin.left, width - margin.right])
+        .padding(0.5);
+
+    const maxPop = d3.max(worldPopulationData, d => d.value);
+    
+    const y = d3.scaleLinear()
+        .domain([0, maxPop])
+        .range([height - margin.bottom, margin.top]);
+
+    const lineGenerator = d3.line()
+        .x(d => x(d.year))
+        .y(d => y(d.value));
+
+    // Add grey background for future projections
+    svg.append("rect")
+        .attr("x", x(2024))
+        .attr("y", margin.top)
+        .attr("width", width - x(2024) - margin.right)
+        .attr("height", height - margin.top - margin.bottom)
+        .attr("fill", "#f5f5f5")
+        .attr("opacity", 0.3);
+
+    // Línea vertical 2024
+    svg.append("line")
+        .attr("x1", x(2024))
+        .attr("x2", x(2024))
+        .attr("y1", margin.top)
+        .attr("y2", height - margin.bottom)
+        .attr("stroke", "#999")
+        .attr("stroke-dasharray", "4,4");
+
+    // Dibujar línea
+    svg.append("path")
+        .datum(worldPopulationData)
+        .attr("fill", "none")
+        .attr("stroke", "#1f77b4")
+        .attr("stroke-width", 2)
+        .attr("d", lineGenerator);
+
+    // Puntos y etiquetas
+    worldPopulationData.forEach(d => {
+        const g = svg.append("g");
+
+        // Punto
+        g.append("circle")
+            .attr("cx", x(d.year))
+            .attr("cy", y(d.value))
+            .attr("r", 4)
+            .attr("fill", "#1f77b4");
+
+        // Etiqueta
+        g.append("text")
+            .attr("x", x(d.year))
+            .attr("y", y(d.value) - 10)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "10px")
+            .text(formatPopulation(d.value));
+    });
+
+    // Ejes
+    svg.append("g")
+        .attr("transform", `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+    svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y).tickFormat(formatYAxis));
+}
+
+function createGrowthRateChart(data) {
+    const width = 800;
+    const height = 400;
+    const margin = {top: 20, right: 120, bottom: 60, left: 60};
+
+    const svg = d3.select("#good-bad .chart")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    // Calcular tasas de crecimiento
+    const growthRates = data
+        .map(d => ({
+            country: d.country,
+            rate: ((+d.pop2024 - +d.pop2023) / +d.pop2023) * 100,
+            pop2023: +d.pop2023,
+            pop2024: +d.pop2024
+        }))
+        .filter(d => d.pop2023 > 1000000) // Filtrar países con población > 1M
+        .sort((a, b) => b.rate - a.rate)
+        .slice(0, 15); // Top 15 países
+
+    const x = d3.scaleBand()
+        .domain(growthRates.map(d => d.country))
+        .range([margin.left, width - margin.right])
+        .padding(0.1);
+
+    const y = d3.scaleLinear()
+        .domain([
+            Math.min(d3.min(growthRates, d => d.rate), 0),
+            Math.max(d3.max(growthRates, d => d.rate), 0)
+        ])
+        .range([height - margin.bottom, margin.top])
+        .nice();
+
+    // Línea de 0%
+    svg.append("line")
+        .attr("x1", margin.left)
+        .attr("x2", width - margin.right)
+        .attr("y1", y(0))
+        .attr("y2", y(0))
+        .attr("stroke", "#999")
+        .attr("stroke-width", 1);
+
+    // Barras
+    const bars = svg.selectAll("g.bar")
+        .data(growthRates)
+        .enter()
+        .append("g")
+        .attr("class", "bar");
+
+    bars.append("rect")
+        .attr("x", d => x(d.country))
+        .attr("y", d => d.rate > 0 ? y(d.rate) : y(0))
+        .attr("height", d => Math.abs(y(0) - y(d.rate)))
+        .attr("width", x.bandwidth())
+        .attr("fill", d => d.rate > 0 ? "#2ecc71" : "#e74c3c");
+
+    // Etiquetas de tasa
+    bars.append("text")
+        .attr("x", d => x(d.country) + x.bandwidth() / 2)
+        .attr("y", d => d.rate > 0 ? y(d.rate) - 5 : y(d.rate) + 15)
+        .attr("text-anchor", "middle")
+        .attr("fill", "black")
+        .attr("font-size", "10px")
+        .text(d => `${d.rate.toFixed(1)}%`);
+
+    // Etiquetas de población
+    bars.append("text")
+        .attr("x", d => x(d.country) + x.bandwidth() / 2)
+        .attr("y", d => d.rate > 0 ? y(d.rate) - 20 : y(d.rate) + 30)
+        .attr("text-anchor", "middle")
+        .attr("fill", "black")
+        .attr("font-size", "8px")
+        .text(d => {
+            const pop = (d.pop2024 / 1e6).toFixed(1);
+            return pop >= 1000 ? 
+                `${(pop/1000).toFixed(1)} billion` : 
+                `${pop} million`;
+        });
+
+    // Eje X
+    svg.append("g")
+        .attr("transform", `translate(0,${y(0)})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .attr("transform", "rotate(-45)")
+        .attr("text-anchor", "end")
+        .attr("dx", "-.8em")
+        .attr("dy", ".15em");
+
+    // Eje Y
+    svg.append("g")
+        .attr("transform", `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y).tickFormat(d => `${d.toFixed(1)}%`));
+
+    // Título del eje Y
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", margin.left - 40)
+        .attr("x", -height/2)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "12px")
+        .text("Growth Rate (%)");
+
+    // Leyenda
+    const legend = svg.append("g")
+        .attr("transform", `translate(${width - margin.right + 20}, ${margin.top})`);
+
+    legend.append("rect")
+        .attr("width", 15)
+        .attr("height", 15)
+        .attr("fill", "#2ecc71");
+
+    legend.append("rect")
+        .attr("width", 15)
+        .attr("height", 15)
+        .attr("y", 20)
+        .attr("fill", "#e74c3c");
+
+    legend.append("text")
+        .attr("x", 20)
+        .attr("y", 12)
+        .text("Growth");
+
+    legend.append("text")
+        .attr("x", 20)
+        .attr("y", 32)
+        .text("Decline");
+}
+// Create all charts
+    createGlobalChangeChart(data);
+    createWorldPopulationTrendChart(data);
+    createGrowthRateChart(data);
+});
+</script>
+</body>
+</html>
